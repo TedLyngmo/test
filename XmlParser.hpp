@@ -9,91 +9,118 @@
 
 #include <string>
 #include <list>
-#include <exception>
+#include <stdexcept>
 #include <iostream>
 
 using namespace std;
 
-enum QueryComparison { stringEqual,stringNotEqual,numericEqual,numericLess,numericGreater,numericNotEqual };
+//enum QueryComparison { stringEqual,stringNotEqual,numericEqual,numericLess,numericGreater,numericNotEqual };
 
-class XmlException : public std::exception {
+class xmlstring : public std::basic_string<char> {
 public:
-    string Description;
-    int Errno;
-public:
-   // XmlException( const XmlException &ex );
-    XmlException( int ErrorCode=0, const char *Desc=NULL );
-    XmlException( int ErrorCode=0, const string Desc="" );
-    ~XmlException() throw();
-    friend ostream& operator<<( ostream &os, const XmlException &ex ) {
-	os << string("[") << ex.Description << "(" << ex.Errno << ")]";
-	return os;
+    using std::basic_string<char>::operator=;
+
+    xmlstring() : std::basic_string<char>() {}
+    xmlstring(const char* str) : std::basic_string<char>(str) {}
+    xmlstring(const std::basic_string<char>& str) : std::basic_string<char>(str) {}
+    xmlstring& operator=(const char* str) {
+        std::basic_string<char>::operator=(str);
+        return *this;
     }
-//    const char *what() const throw();
+
+    friend std::istream& operator>>(std::istream&, xmlstring&);
+    friend std::ostream& operator<<(std::ostream&, const xmlstring&);
 };
 
-class XmlElement;
+std::istream& operator>>(std::istream&, xmlstring&);
+std::ostream& operator<<(std::ostream&, const xmlstring&);
 
-class XmlQueryException : public XmlException {
-public:
-    XmlElement *Query;
-    XmlQueryException( const XmlQueryException &ex );
-    XmlQueryException( int ErrorCode, XmlElement &query );
-    ~XmlQueryException() throw();
-};
 
 class XmlElement {
 private:
-    XmlElement &copy( const XmlElement &cpy );
+    XmlElement& copy( const XmlElement &cpy );
 public:
-    static int InstanceCounter;
-    
     XmlElement *Parent;
-    std::list <XmlElement*> elements;	// sub elements / parameters
-    std::list <XmlElement*>::iterator Current; // current sub element
-    string		Name;		// Name of element
-    string		Value;		// Value of element, if any
+    std::list<XmlElement*> elements;	// sub elements / parameters
+
+    typedef std::list<XmlElement*>::iterator iterator;
+    typedef std::list<XmlElement*>::const_iterator const_iterator;
+
+    iterator Current; // current sub element
+    std::string		Name;		// Name of element
+    xmlstring   	Value;		// Value of element, if any
     int			TagType;	// ?, ! or /
     bool		isNull;		// is Value=="" a value, or is it not even set?
     bool		isParameter;	// as in <tagname parameter="" />
-    QueryComparison	CompAlg;	// if this is a query, how should the values be compared?
+    //QueryComparison	CompAlg;	// if this is a query, how should the values be compared?
 
 
-    XmlElement();
-    XmlElement( const XmlElement &copy );
-    XmlElement( XmlElement *parent, string name, string value="", bool isnull=false );
+    XmlElement();                       // default ctor
+    XmlElement(const XmlElement &copy, XmlElement* parent=NULL); // copy ctor
+    XmlElement(const std::string& string_to_parse);
+    XmlElement(const char* string_to_parse);
+    XmlElement(XmlElement *parent, const std::string& name, xmlstring value="", bool isnull=false);
     ~XmlElement();
 
-    const char* c_str();
+    const char* c_str() const;          // Value as char* string
+    int         to_int() const;         // Value as an integer
+    std::string str() const;            // the complete doc as a string
     size_t	length();
     void	Clear();
-    XmlElement&	getCurrent()				throw( XmlException );
-    void	setCurrent(const XmlElement *)		throw( XmlException );
+    XmlElement&	getCurrent();
+    void	setCurrent(const XmlElement *);
     void	setParent( XmlElement *parent );
-    XmlElement&	getParent( unsigned int step=1 )	throw( XmlException );
-    XmlElement&	getFirst( unsigned int step=1 )		throw( XmlException );
-    XmlElement&	getNext( unsigned int step=1 )		throw( XmlException );
-    bool        atEnd();                                // if getFirst or getNext didn't return a valid element
-    XmlElement&	parse( string xmldata )			throw( XmlException );
-    XmlElement&	load( string file )			throw( XmlException );
-    XmlElement&	addElement( string element_name="", string element_value="" );
-    XmlElement&	addParameters( string parameters )	throw( XmlException );	// returns the element to which the parameters were added
+    XmlElement&	getParent( unsigned int step=1 );
+    XmlElement&	parse(const std::string& xmldata);
+    XmlElement&	load(const std::string& file);
+    XmlElement&	addElement(std::string element_name="", xmlstring element_value="" );
+    XmlElement&	addParameters(const std::string& parameters);	// returns the element to which the parameters were added
 
     XmlElement*	query_r( XmlElement &query, int depth, int &max_depth_found, XmlElement *best_so_far );	// reentrant
-    XmlElement&	operator()( XmlElement &query )		throw( XmlQueryException );
-    XmlElement&	operator()( string query_string )	throw( XmlQueryException );	// dual purpose: If query_string starts with '<' the whole string is transformed into an XmlElement and a query is performed
+    XmlElement&	operator()( XmlElement &query );
+    XmlElement&	operator()( std::string query_string );	// dual purpose: If query_string starts with '<' the whole string is transformed into an XmlElement and a query is performed
     											//               but otherwise, query_string is actually used as an element_name. If found, treated as ["element_name"] otherwise inserted.
-    XmlElement&	operator[]( string element_name )	throw( XmlException );
+    XmlElement&	operator[]( const std::string element_name );
 
     XmlElement&	operator=( const XmlElement &rval );
-    XmlElement&	operator=( string value );
+    XmlElement&	operator=( std::string value );
     bool	operator==( XmlElement &rval );
     bool	operator!=( XmlElement &rval );
-    bool	operator==( string value );
-    bool	operator!=( string value );
+    bool	operator==( std::string value );
+    bool	operator!=( std::string value );
 
-    friend ostream& operator<<( ostream &os, const XmlElement &Element );
+    iterator begin() { return elements.begin(); }
+    const_iterator begin() const { return elements.begin(); }
+    iterator end() { return elements.end(); }
+    const_iterator end() const { return elements.end(); }
 
+    friend ostream& operator<<( std::ostream& os, const XmlElement& Element );
+
+};
+
+ostream& operator<<( std::ostream& os, const XmlElement& Element );
+
+class XmlException : public std::runtime_error {
+public:
+    //XmlException();                             // default ctor
+    //XmlException( const XmlException& ex );     // copy ctor
+    //XmlException( XmlException&& ex );          // move ctor
+    XmlException( const char *what_arg );
+    XmlException( const std::string& desc );
+    virtual ~XmlException() throw();
+
+    friend ostream& operator<<( ostream& os, const XmlException& ex ) {
+	os << ex.what();
+	return os;
+    }
+};
+
+class XmlQueryException : public XmlException {
+public:
+    XmlElement Query;
+    XmlQueryException(const XmlQueryException& ex);
+    XmlQueryException(const XmlElement& doc, const XmlElement& query);
+    virtual ~XmlQueryException() throw();
 };
 
 #endif
